@@ -31,6 +31,10 @@ async function handleRequest(request) {
   const url = new URL(request.url);
   const current_host = url.host;
   
+  // 检测Host头，优先使用Host头中的域名来决定后缀
+  const host_header = request.headers.get('Host');
+  const effective_host = host_header || current_host;
+  
   // 检查特殊路径重定向
   if (redirect_paths.includes(url.pathname)) {
     return Response.redirect('https://www.gov.cn', 302);
@@ -42,8 +46,8 @@ async function handleRequest(request) {
     return Response.redirect(url.href);
   }
 
-  // 从当前主机名中提取前缀
-  const host_prefix = getProxyPrefix(current_host);
+  // 从有效主机名中提取前缀
+  const host_prefix = getProxyPrefix(effective_host);
   if (!host_prefix) {
     return new Response('Domain not configured for proxy', { status: 404 });
   }
@@ -61,9 +65,20 @@ async function handleRequest(request) {
     return new Response('Domain not configured for proxy', { status: 404 });
   }
 
+  // 直接使用正则表达式处理最常见的嵌套URL问题
+  let pathname = url.pathname;
+  
+  // 修复特定的嵌套URL模式 - 直接移除嵌套URL部分
+  // 匹配 /xxx/xxx/latest-commit/main/https%3A//gh.xxx.xxx/ 或 /xxx/xxx/tree-commit-info/main/https%3A//gh.xxx.xxx/
+  pathname = pathname.replace(/(\/[^\/]+\/[^\/]+\/(?:latest-commit|tree-commit-info)\/[^\/]+)\/https%3A\/\/[^\/]+\/.*/, '$1');
+  
+  // 同样处理非编码版本
+  pathname = pathname.replace(/(\/[^\/]+\/[^\/]+\/(?:latest-commit|tree-commit-info)\/[^\/]+)\/https:\/\/[^\/]+\/.*/, '$1');
+
   // 构建新的请求URL
   const new_url = new URL(url);
   new_url.host = target_host;
+  new_url.pathname = pathname;
   new_url.protocol = 'https:';
 
   // 设置新的请求头
@@ -72,25 +87,6 @@ async function handleRequest(request) {
   new_headers.set('Referer', new_url.href);
   
   try {
-    // 修复URL路径中的嵌套URL问题
-    if (url.pathname.includes('https%3A//') || url.pathname.includes('https://')) {
-      const path_parts = url.pathname.split('/');
-      for (let i = 0; i < path_parts.length; i++) {
-        if (path_parts[i].includes('https%3A//') || path_parts[i].includes('https://')) {
-          // 去除嵌套URL中的代理域名前缀
-          for (const [original, prefix] of Object.entries(domain_mappings)) {
-            const encoded_proxy = encodeURIComponent(`https://${prefix}`);
-            const regular_proxy = `https://${prefix}`;
-            
-            // 处理URL编码和非编码的情况
-            path_parts[i] = path_parts[i].replace(encoded_proxy, encodeURIComponent(`https://`));
-            path_parts[i] = path_parts[i].replace(regular_proxy, 'https://');
-          }
-        }
-      }
-      new_url.pathname = path_parts.join('/');
-    }
-
     // 发起请求
     const response = await fetch(new_url.href, {
       method: request.method,
@@ -110,8 +106,8 @@ async function handleRequest(request) {
     new_response_headers.delete('content-security-policy-report-only');
     new_response_headers.delete('clear-site-data');
     
-    // 处理响应内容，替换域名引用
-    const modified_body = await modifyResponse(response_clone, host_prefix, url.hostname);
+    // 处理响应内容，替换域名引用，使用有效主机名来决定域名后缀
+    const modified_body = await modifyResponse(response_clone, host_prefix, effective_host);
 
     return new Response(modified_body, {
       status: response.status,
@@ -139,7 +135,7 @@ function getProxyPrefix(host) {
   return null;
 }
 
-async function modifyResponse(response, host_prefix, current_hostname) {
+async function modifyResponse(response, host_prefix, effective_hostname) {
   // 只处理文本内容
   const content_type = response.headers.get('content-type') || '';
   if (!content_type.includes('text/') && !content_type.includes('application/json') && 
@@ -149,8 +145,8 @@ async function modifyResponse(response, host_prefix, current_hostname) {
 
   let text = await response.text();
   
-  // 获取当前域名的后缀部分（用于构建完整的代理域名）
-  const domain_suffix = current_hostname.substring(host_prefix.length);
+  // 使用有效主机名获取域名后缀部分（用于构建完整的代理域名）
+  const domain_suffix = effective_hostname.substring(host_prefix.length);
   
   // 替换所有域名引用
   for (const [original_domain, proxy_prefix] of Object.entries(domain_mappings)) {
@@ -170,13 +166,4 @@ async function modifyResponse(response, host_prefix, current_hostname) {
     );
   }
 
-  // 处理相对路径
-  if (host_prefix === 'gh.') {
-    text = text.replace(
-      /(?<=["'])\/(?!\/|[a-zA-Z]+:)/g,
-      `https://${current_hostname}/`
-    );
-  }
-
-  return text;
-}
+  // 处理相对路径，使用
