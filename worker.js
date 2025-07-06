@@ -166,4 +166,13 @@ async function modifyResponse(response, host_prefix, effective_hostname) {
     );
   }
 
-  // 处理相对路径，使用
+  // 处理相对路径，使用有效主机名
+  if (host_prefix === 'gh.') {
+    text = text.replace(
+      /(?<=["'])\/(?!\/|[a-zA-Z]+:)/g,
+      `https://${effective_hostname}/`
+    );
+  }
+
+  return text;
+}
