@@ -1,23 +1,6 @@
 // 域名映射配置
 const domain_mappings = {
-  'github.com': 'gh.',
-  'avatars.githubusercontent.com': 'avatars-githubusercontent-com.',
-  'github.githubassets.com': 'github-githubassets-com.',
-  'collector.github.com': 'collector-github-com.',
-  'api.github.com': 'api-github-com.',
-  'raw.githubusercontent.com': 'raw-githubusercontent-com.',
-  'gist.githubusercontent.com': 'gist-githubusercontent-com.',
-  'github.io': 'github-io.',
-  'assets-cdn.github.com': 'assets-cdn-github-com.',
-  'cdn.jsdelivr.net': 'cdn.jsdelivr-net.',
-  'securitylab.github.com': 'securitylab-github-com.',
-  'www.githubstatus.com': 'www-githubstatus-com.',
-  'npmjs.com': 'npmjs-com.',
-  'git-lfs.github.com': 'git-lfs-github-com.',
-  'githubusercontent.com': 'githubusercontent-com.',
-  'github.global.ssl.fastly.net': 'github-global-ssl-fastly-net.',
-  'api.npms.io': 'api-npms-io.',
-  'github.community': 'github-community.'
+  'https://9b7d541062cf08e6ac343091f442e7916f251475-8282.dstack-prod8.phala.network': 'wallos.'
 };
 
 // 需要重定向的路径
